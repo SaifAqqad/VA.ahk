@@ -1,4 +1,4 @@
-; VA v2.4
+﻿; VA v2.4
 
 ;
 ; AUDIO DEVICES
