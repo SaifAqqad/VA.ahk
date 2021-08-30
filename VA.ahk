@@ -1,30 +1,6 @@
 ﻿; VA v2.4
 
 ;
-; AUDIO DEVICES
-;
-
-; Returns a list of all devices that match the device_desc
-VA_GetDeviceList(device_desc:="playback")
-{
-    devicesList:= Array()
-    Loop {
-        device:= VA_GetDevice(device_desc ":" . A_Index)
-        if(!device)
-            break
-        devicesList.push(VA_GetDeviceName(device))
-        ObjRelease(device)
-    }
-    return devicesList
-}
-
-; Returns a list of all capture devices
-VA_GetCaptureDeviceList()
-{ 
-    return VA_GetDeviceList("capture") 
-}
-
-;
 ; MASTER CONTROLS
 ;
 
@@ -426,6 +402,19 @@ VA_SetDefaultEndpoint(device_desc, role)
     return hr = 0
 }
 
+; Returns a list of all devices that match the device_desc
+VA_GetDeviceList(device_desc:="playback")
+{
+    devicesList:= Array()
+    Loop {
+        device:= VA_GetDevice(device_desc ":" . A_Index)
+        if(!device)
+            break
+        devicesList.push(VA_GetDeviceName(device))
+        ObjRelease(device)
+    }
+    return devicesList
+}
 
 ;
 ; HELPERS
