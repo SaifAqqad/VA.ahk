@@ -1,4 +1,4 @@
-; VA v2.4
+﻿; VA v2.4
 
 ;
 ; MASTER CONTROLS
@@ -551,13 +551,7 @@ VA_IAudioEndpointVolumeCallback_CallFunc(this, pNotify)
     notifyObj:= { GUID: StrGet(&pNotify, "UTF-16")
                 , Muted: NumGet(pNotify + 16, "UInt")
                 , MasterVolume: NumGet(pNotify + 20, "Float")
-                , Channels: NumGet(pNotify + 24, "UInt")
-                , ChannelVolumes: Array() }
-
-    Loop % notifyObj.Channels
-    {
-        notifyObj.ChannelVolumes[A_Index]:= NumGet(pNotify + 28 + (A_Index-1)*4, "Float")
-    }
+                , Channels: NumGet(pNotify + 24, "UInt")}
     VA_IAudioEndpointVolumeCallbacks[this].Call(notifyObj)
 }
 
