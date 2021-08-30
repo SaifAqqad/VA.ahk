@@ -1,4 +1,4 @@
-﻿; VA v2.4
+; VA v2.4
 
 ;
 ; MASTER CONTROLS
@@ -20,7 +20,7 @@ VA_SetMasterVolume(vol, channel="", device_desc="playback")
 {
     vol := vol>100 ? 100 : vol<0 ? 0 : vol
     if ! aev := VA_GetAudioEndpointVolume(device_desc)
-        return
+        return -1
     if channel =
         VA_IAudioEndpointVolume_SetMasterVolumeLevelScalar(aev, vol/100)
     else
@@ -31,7 +31,7 @@ VA_SetMasterVolume(vol, channel="", device_desc="playback")
 VA_GetMasterChannelCount(device_desc="playback")
 {
     if ! aev := VA_GetAudioEndpointVolume(device_desc)
-        return
+        return -1
     VA_IAudioEndpointVolume_GetChannelCount(aev, count)
     ObjRelease(aev)
     return count
@@ -40,7 +40,7 @@ VA_GetMasterChannelCount(device_desc="playback")
 VA_SetMasterMute(mute, device_desc="playback")
 {
     if ! aev := VA_GetAudioEndpointVolume(device_desc)
-        return
+        return -1
     VA_IAudioEndpointVolume_SetMute(aev, mute)
     ObjRelease(aev)
 }
@@ -48,7 +48,7 @@ VA_SetMasterMute(mute, device_desc="playback")
 VA_GetMasterMute(device_desc="playback")
 {
     if ! aev := VA_GetAudioEndpointVolume(device_desc)
-        return
+        return -1
     VA_IAudioEndpointVolume_GetMute(aev, mute)
     ObjRelease(aev)
     return mute
