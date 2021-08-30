@@ -1,5 +1,9 @@
 # Vista Audio Control Functions
 
+## This is an altered version of Lexikos's VA.ahk that includes some extra functionality.
+
+
+# Original copyright notice:
 ```
 Copyright (c) 2013 Lexikos
 

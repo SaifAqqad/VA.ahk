@@ -1,4 +1,25 @@
-; VA v2.3
+; VA v2.4
+
+;
+; AUDIO DEVICES
+;
+
+; Returns a list of all devices that match the device_desc
+VA_GetDeviceList(device_desc:="playback"){
+    devicesList:= Array()
+    Loop {
+        device:= VA_GetDevice(device_desc ":" . A_Index)
+        if(!device)
+            break
+        devicesList.push(VA_GetDeviceName(device))
+    }
+    return devicesList
+}
+
+; Returns a list of all capture devices
+VA_GetCaptureDeviceList(){ 
+    return VA_GetDeviceList("capture") 
+}
 
 ;
 ; MASTER CONTROLS
@@ -441,6 +462,202 @@ VA_Scalar2dB(s, min_dB, max_dB) {
     return log((max_s-min_s)*s+min_s)*20
 }
 
+;
+; Callback creation functions.
+;
+
+; Registers a callback function for an audio device
+VA_CreateAudioEndpointCallback(callback_func:= "", device_desc:="playback")
+{
+    if ! aev := VA_GetAudioEndpointVolume(device_desc)
+        return
+    if ! aev_cb := VA_IAudioEndpointVolumeCallback_Create(aev)
+        return
+    VA_MapAudioEndpointCallbackFunc(aev_cb, callback_func)
+    VA_IAudioEndpointVolume_RegisterControlChangeNotify(aev,aev_cb)
+    onExit(Func("VA_ReleaseAudioEndpointCallback").Bind(aev,aev_cb))
+    return aev_cb
+}
+
+VA_ReleaseAudioEndpointCallback(aev, aev_cb)
+{
+    global VA_IAudioEndpointVolumeCallbacks
+    VA_IAudioEndpointVolume_UnregisterControlChangeNotify(aev,aev_cb)
+    VA_IAudioEndpointVolumeCallbacks[aev_cb]:= ""
+    ObjRelease(aev_cb)
+    ObjRelease(aev)
+}
+
+VA_MapAudioEndpointCallbackFunc(aev_cb, func)
+{
+    global VA_IAudioEndpointVolumeCallbacks
+    if(!VA_IAudioEndpointVolumeCallbacks)
+        VA_IAudioEndpointVolumeCallbacks:= Array()
+    if (fn:=Func(func)) ; if func is function name
+        VA_IAudioEndpointVolumeCallbacks[aev_cb]:= fn
+    else if(isObject(func)) ; if func is func object
+        VA_IAudioEndpointVolumeCallbacks[aev_cb]:= func
+}
+
+;
+;IAudioEndpointVolumeCallback functions' implementation
+;
+
+VA_IAudioEndpointVolumeCallback_Create(aev)
+{
+   static VTBL := [ "QueryInterface"
+                  , "AddRef"
+                  , "Release"
+                  , "OnNotify" ]
+                  
+        , heapSize := A_PtrSize*10
+        , heapOffset := A_PtrSize*9
+        
+        , flags := (HEAP_GENERATE_EXCEPTIONS := 0x4) | (HEAP_NO_SERIALIZE := 0x1)
+        , HEAP_ZERO_MEMORY := 0x8
+   
+   hHeap := DllCall("HeapCreate", "UInt", flags, "Ptr", 0, "Ptr", 0, "Ptr")
+   addr := IAudioEndpointVolumeCallback := DllCall("HeapAlloc", "Ptr", hHeap, "UInt", HEAP_ZERO_MEMORY, "Ptr", heapSize, "Ptr")
+   addr := NumPut(addr + A_PtrSize, addr + 0)
+   for k, v in VTBL
+      addr := NumPut( VA_RegisterSyncCallback("VA_IAudioEndpointVolumeCallback_" . v), addr + 0 )
+   NumPut(hHeap, IAudioEndpointVolumeCallback + heapOffset)
+   return IAudioEndpointVolumeCallback
+}
+
+VA_IAudioEndpointVolumeCallback_QueryInterface(this, id, pObject)
+{
+    return 0
+}
+
+VA_IAudioEndpointVolumeCallback_AddRef(this)
+{
+   static refOffset := A_PtrSize*8
+   NumPut(refCount := NumGet(this + refOffset, "UInt") + 1, this + refOffset, "UInt")
+   return refCount
+}
+
+VA_IAudioEndpointVolumeCallback_Release(this)
+{
+   static refOffset := A_PtrSize*8
+        , heapOffset := A_PtrSize*9
+   NumPut(refCount := NumGet(this + refOffset, "UInt") - 1, this + refOffset, "UInt")
+   if (refCount = 0) {
+      hHeap := NumGet(this + heapOffset)
+      DllCall("HeapDestroy", "Ptr", hHeap)
+   }
+   return refCount
+}
+
+VA_IAudioEndpointVolumeCallback_OnNotify(this, pNotify)
+{
+    timer := Func("VA_IAudioEndpointVolumeCallback_CallFunc").Bind(this, pNotify)
+    Try SetTimer, % timer, -10
+    return 0
+}
+
+VA_IAudioEndpointVolumeCallback_CallFunc(this, pNotify)
+{
+    global VA_IAudioEndpointVolumeCallbacks
+    notifyObj:= { GUID: StrGet(&pNotify, "UTF-16")
+                , Muted: NumGet(pNotify + 16, "UInt")
+                , MasterVolume: NumGet(pNotify + 20, "Float")
+                , Channels: NumGet(pNotify + 24, "UInt")
+                , ChannelVolumes: Array() }
+
+    Loop % notifyObj.Channels
+    {
+        notifyObj.ChannelVolumes[A_Index]:= NumGet(pNotify + 28 + (A_Index-1)*4, "Float")
+    }
+    VA_IAudioEndpointVolumeCallbacks[this].Call(notifyObj)
+}
+
+; RegisterSyncCallback() by lexikos : https://www.autohotkey.com/boards/viewtopic.php?t=21223
+VA_RegisterSyncCallback(FunctionName, Options:="", ParamCount:="")
+{
+    if !(fn := Func(FunctionName)) || fn.IsBuiltIn
+        throw Exception("Bad function", -1, FunctionName)
+    if (ParamCount == "")
+        ParamCount := fn.MinParams
+    if (ParamCount > fn.MaxParams && !fn.IsVariadic || ParamCount+0 < fn.MinParams)
+        throw Exception("Bad param count", -1, ParamCount)
+    
+    static sHwnd := 0, sMsg, sSendMessageW
+    if !sHwnd
+    {
+        Gui VA_RegisterSyncCallback: +Parent%A_ScriptHwnd% +hwndsHwnd
+        OnMessage(sMsg := 0x8000, Func("VA_RegisterSyncCallback_Msg"))
+        sSendMessageW := DllCall("GetProcAddress", "ptr", DllCall("GetModuleHandle", "str", "user32.dll", "ptr"), "astr", "SendMessageW", "ptr")
+    }
+    
+    if !(pcb := DllCall("GlobalAlloc", "uint", 0, "ptr", 96, "ptr"))
+        throw
+    DllCall("VirtualProtect", "ptr", pcb, "ptr", 96, "uint", 0x40, "uint*", 0)
+    
+    p := pcb
+    if (A_PtrSize = 8)
+    {
+        /*
+        48 89 4c 24 08  ; mov [rsp+8], rcx
+        48 89 54'24 10  ; mov [rsp+16], rdx
+        4c 89 44 24 18  ; mov [rsp+24], r8
+        4c'89 4c 24 20  ; mov [rsp+32], r9
+        48 83 ec 28'    ; sub rsp, 40
+        4c 8d 44 24 30  ; lea r8, [rsp+48]  (arg 3, &params)
+        49 b9 ..        ; mov r9, .. (arg 4, operand to follow)
+        */
+        p := NumPut(0x54894808244c8948, p+0)
+        p := NumPut(0x4c182444894c1024, p+0)
+        p := NumPut(0x28ec834820244c89, p+0)
+        p := NumPut(  0xb9493024448d4c, p+0) - 1
+        lParamPtr := p, p += 8
+        
+        p := NumPut(0xba, p+0, "char") ; mov edx, nmsg
+        p := NumPut(sMsg, p+0, "int")
+        p := NumPut(0xb9, p+0, "char") ; mov ecx, hwnd
+        p := NumPut(sHwnd, p+0, "int")
+        p := NumPut(0xb848, p+0, "short") ; mov rax, SendMessageW
+        p := NumPut(sSendMessageW, p+0)
+        /*
+        ff d0        ; call rax
+        48 83 c4 28  ; add rsp, 40
+        c3           ; ret
+        */
+        p := NumPut(0x00c328c48348d0ff, p+0)
+    }
+    else ;(A_PtrSize = 4)
+    {
+        p := NumPut(0x68, p+0, "char")      ; push ... (lParam data)
+        lParamPtr := p, p += 4
+        p := NumPut(0x0824448d, p+0, "int") ; lea eax, [esp+8]
+        p := NumPut(0x50, p+0, "char")      ; push eax
+        p := NumPut(0x68, p+0, "char")      ; push nmsg
+        p := NumPut(sMsg, p+0, "int")
+        p := NumPut(0x68, p+0, "char")      ; push hwnd
+        p := NumPut(sHwnd, p+0, "int")
+        p := NumPut(0xb8, p+0, "char")      ; mov eax, &SendMessageW
+        p := NumPut(sSendMessageW, p+0, "int")
+        p := NumPut(0xd0ff, p+0, "short")   ; call eax
+        p := NumPut(0xc2, p+0, "char")      ; ret argsize
+        p := NumPut((InStr(Options, "C") ? 0 : ParamCount*4), p+0, "short")
+    }
+    NumPut(p, lParamPtr+0) ; To be passed as lParam.
+    p := NumPut(&fn, p+0)
+    p := NumPut(ParamCount, p+0, "int")
+    return pcb
+}
+
+VA_RegisterSyncCallback_Msg(wParam, lParam)
+{
+    if (A_Gui != "VA_RegisterSyncCallback")
+        return
+    fn := Object(NumGet(lParam + 0))
+    paramCount := NumGet(lParam + A_PtrSize, "int")
+    params := []
+    Loop % paramCount
+        params.Push(NumGet(wParam + A_PtrSize * (A_Index-1)))
+    return %fn%(params*)
+}
 
 ;
 ; INTERFACE WRAPPERS
