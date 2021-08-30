@@ -467,7 +467,6 @@ VA_CreateAudioEndpointCallback(callback_func:= "", device_desc:="playback")
         return
     VA_MapAudioEndpointCallbackFunc(aev_cb, callback_func)
     VA_IAudioEndpointVolume_RegisterControlChangeNotify(aev,aev_cb)
-    onExit(Func("VA_ReleaseAudioEndpointCallback").Bind(aev,aev_cb))
     return aev_cb
 }
 
@@ -476,8 +475,6 @@ VA_ReleaseAudioEndpointCallback(aev, aev_cb)
     global VA_IAudioEndpointVolumeCallbacks
     VA_IAudioEndpointVolume_UnregisterControlChangeNotify(aev,aev_cb)
     VA_IAudioEndpointVolumeCallbacks[aev_cb]:= ""
-    ObjRelease(aev_cb)
-    ObjRelease(aev)
 }
 
 VA_MapAudioEndpointCallbackFunc(aev_cb, func)
