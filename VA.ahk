@@ -473,8 +473,8 @@ VA_CreateAudioEndpointCallback(callback_func:= "", device_desc:="playback")
 VA_ReleaseAudioEndpointCallback(aev, aev_cb)
 {
     global VA_IAudioEndpointVolumeCallbacks
-    VA_IAudioEndpointVolume_UnregisterControlChangeNotify(aev,aev_cb)
     VA_IAudioEndpointVolumeCallbacks[aev_cb]:= ""
+    VA_IAudioEndpointVolume_UnregisterControlChangeNotify(aev,aev_cb)
 }
 
 VA_MapAudioEndpointCallbackFunc(aev_cb, func)
