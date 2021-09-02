@@ -553,7 +553,7 @@ VA_IAudioEndpointVolumeCallback_CallFunc(this, pNotify)
         notifyObj:= { GUID: StrGet(&pNotify, "UTF-16")
                     , Muted: NumGet(pNotify + 16, "UInt")+0
                     , MasterVolume: NumGet(pNotify + 20, "Float")+0
-                    , Channels: NumGet(pNotify + 24, "UInt")}+0
+                    , Channels: NumGet(pNotify + 24, "UInt")+0}
         func.Call(notifyObj)
     }
 }
