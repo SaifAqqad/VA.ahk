@@ -475,6 +475,7 @@ VA_ReleaseAudioEndpointCallback(aev, aev_cb)
     global VA_IAudioEndpointVolumeCallbacks
     VA_IAudioEndpointVolumeCallbacks[aev_cb]:= ""
     VA_IAudioEndpointVolume_UnregisterControlChangeNotify(aev,aev_cb)
+    ObjRelease(aev_cb)
 }
 
 VA_MapAudioEndpointCallbackFunc(aev_cb, func)
@@ -548,11 +549,13 @@ VA_IAudioEndpointVolumeCallback_OnNotify(this, pNotify)
 VA_IAudioEndpointVolumeCallback_CallFunc(this, pNotify)
 {
     global VA_IAudioEndpointVolumeCallbacks
-    notifyObj:= { GUID: StrGet(&pNotify, "UTF-16")
-                , Muted: NumGet(pNotify + 16, "UInt")
-                , MasterVolume: NumGet(pNotify + 20, "Float")
-                , Channels: NumGet(pNotify + 24, "UInt")}
-    VA_IAudioEndpointVolumeCallbacks[this].Call(notifyObj)
+    if(func:= VA_IAudioEndpointVolumeCallbacks[this]){
+        notifyObj:= { GUID: StrGet(&pNotify, "UTF-16")
+                    , Muted: NumGet(pNotify + 16, "UInt")+0
+                    , MasterVolume: NumGet(pNotify + 20, "Float")+0
+                    , Channels: NumGet(pNotify + 24, "UInt")}+0
+        func.Call(notifyObj)
+    }
 }
 
 ; RegisterSyncCallback() by lexikos : https://www.autohotkey.com/boards/viewtopic.php?t=21223
