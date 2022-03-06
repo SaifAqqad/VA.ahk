@@ -316,26 +316,30 @@ VA_GetDevice(device_desc="playback")
     
     if device_desc is integer
     {
-        m2 := device_desc
-        if m2 >= 4096 ; Probably a device pointer, passed here indirectly via VA_GetAudioMeter or such.
+        m3 := device_desc
+        if m3 >= 4096 ; Probably a device pointer, passed here indirectly via VA_GetAudioMeter or such.
         {
-            ObjAddRef(device := m2)
+            ObjAddRef(device := m3)
             goto VA_GetDevice_Return
         }
     }
     else
-        RegExMatch(device_desc, "(.*?)\s*(?::(\d+))?$", m)
+        RegExMatch(device_desc, "(.*?)\s*(?::(capture|playback))?(?::(\d+))?$", m)
     
     if m1 in playback,p
         m1 := "", flow := 0 ; eRender
     else if m1 in capture,c
         m1 := "", flow := 1 ; eCapture
-    else if (m1 . m2) = ""  ; no name or number specified
+    else if m2 in playback
+        flow := 0 ; eRender
+    else if m2 in capture
+        flow := 1 ; eCapture
+    else if (m1 . m3) = ""  ; no name or number specified
         m1 := "", flow := 0 ; eRender (default)
     else
         flow := 2 ; eAll
     
-    if (m1 . m2) = ""   ; no name or number (maybe "playback" or "capture")
+    if (m1 . m3) = ""   ; no name or number (maybe "playback" or "capture")
     {
         VA_IMMDeviceEnumerator_GetDefaultAudioEndpoint(deviceEnumerator, flow, 0, device)
         goto VA_GetDevice_Return
@@ -345,7 +349,7 @@ VA_GetDevice(device_desc="playback")
     
     if m1 =
     {
-        VA_IMMDeviceCollection_Item(devices, m2-1, device)
+        VA_IMMDeviceCollection_Item(devices, m3-1, device)
         goto VA_GetDevice_Return
     }
     
@@ -353,7 +357,7 @@ VA_GetDevice(device_desc="playback")
     index := 0
     Loop % count
         if VA_IMMDeviceCollection_Item(devices, A_Index-1, device) = 0
-            if InStr(VA_GetDeviceName(device), m1) && (m2 = "" || ++index = m2)
+            if InStr(VA_GetDeviceName(device), m1) && (m3 = "" || ++index = m3)
                 goto VA_GetDevice_Return
             else
                 ObjRelease(device), device:=0
